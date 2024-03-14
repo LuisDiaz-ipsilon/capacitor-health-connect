@@ -1,30 +1,25 @@
 package com.ubiehealth.capacitor.healthconnect
 
+
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+import android.util.Log
 import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.core.app.ActivityCompat
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
-import androidx.health.connect.client.changes.Change
-import androidx.health.connect.client.changes.DeletionChange
-import androidx.health.connect.client.changes.UpsertionChange
-import androidx.health.connect.client.impl.converters.datatype.RECORDS_CLASS_NAME_MAP
 import androidx.health.connect.client.impl.converters.datatype.RECORDS_TYPE_NAME_MAP
-import androidx.health.connect.client.impl.converters.permission.toProtoPermission
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
-import androidx.health.connect.client.records.metadata.DataOrigin
-import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
-import androidx.health.connect.client.time.TimeRangeFilter
-import androidx.health.connect.client.units.Mass
-import androidx.health.platform.client.proto.PermissionProto
 import androidx.lifecycle.lifecycleScope
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -33,30 +28,47 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
-import kotlinx.coroutines.flow.flatMap
-import kotlinx.coroutines.flow.flatMapMerge
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import org.json.JSONArray
 import org.json.JSONObject
-import java.lang.RuntimeException
-import java.time.Instant
-import java.time.ZoneOffset
-import java.util.Date
+import kotlin.jvm.internal.Reflection.createKotlinClass
+import kotlin.reflect.KClass
+
 
 @CapacitorPlugin(name = "HealthConnect")
 class HealthConnectPlugin : Plugin() {
-    private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this.context.applicationContext) }
+    //private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this.context.applicationContext) }
+    private val healthConnectClient by lazy { HealthConnectClient.getOrCreate(this.context) }
     private val permissionContract by lazy {
         PermissionController.createRequestPermissionResultContract()
     }
 
     @PluginMethod
     fun checkAvailability(call: PluginCall) {
+
+        val availabilityStatus = HealthConnectClient.getSdkStatus(this.context)
+
+        if (availabilityStatus == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
+            // Optionally redirect to package installer to find a provider, for example:
+            val providerPackageName = "com.ubiehealth.capacitor.healthconnect"
+            val uriString =
+                "market://details?id=$providerPackageName&url=healthconnect%3A%2F%2Fonboarding"
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setPackage("com.android.vending")
+                    data = Uri.parse(uriString)
+                    putExtra("overlay", true)
+                    putExtra("callerId", context.packageName)
+                }
+            )
+            return
+        }
+
+
         val availability = when (val status = HealthConnectClient.getSdkStatus(this.context)) {
             HealthConnectClient.SDK_AVAILABLE -> "Available"
-            HealthConnectClient.SDK_UNAVAILABLE -> "NotSupported"
+            HealthConnectClient.SDK_UNAVAILABLE -> "Unavailable"
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "NotInstalled"
             else -> throw RuntimeException("Invalid sdk status: $status")
         }
@@ -167,7 +179,9 @@ class HealthConnectPlugin : Plugin() {
 
     @PluginMethod
     fun requestHealthPermissions(call: PluginCall) {
+
         if (HealthConnectClient.getSdkStatus(this.context) == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
+
             val intent = Intent(Intent.ACTION_VIEW)
             intent.setPackage("com.android.vending")
             intent.data = Uri.parse("market://details")
@@ -186,6 +200,7 @@ class HealthConnectPlugin : Plugin() {
                 recordType = RECORDS_TYPE_NAME_MAP[it] ?: throw IllegalArgumentException("Unexpected RecordType: $it")
             )
         }.toSet()
+
         val writePermissions = call.getArray("write").toList<String>().map {
             HealthPermission.getWritePermission(
                 recordType = RECORDS_TYPE_NAME_MAP[it] ?: throw IllegalArgumentException("Unexpected RecordType: $it")
@@ -194,10 +209,27 @@ class HealthConnectPlugin : Plugin() {
 
         val intent = permissionContract.createIntent(
             this.context,
-            readPermissions + writePermissions
+            readPermissions + writePermissions,
+        )
+        
+
+
+        val intent2 = permissionContract.createIntent(
+            context = this.context,
+            input = setOf(
+                HealthPermission.getReadPermission(WeightRecord::class),
+                HealthPermission.getWritePermission(WeightRecord::class),
+                HealthPermission.getWritePermission(StepsRecord::class),
+                HealthPermission.getReadPermission(StepsRecord::class),
+                HealthPermission.getReadPermission(HeartRateRecord::class),
+                HealthPermission.getWritePermission(HeartRateRecord::class),
+                HealthPermission.getReadPermission(SleepSessionRecord::class),
+                HealthPermission.getWritePermission(SleepSessionRecord::class)
+            )
         )
 
-        startActivityForResult(call, intent, "handleRequestPermission")
+        startActivityForResult(call, intent2, "handleRequestPermission")
+
     }
 
     @ActivityCallback
@@ -211,11 +243,13 @@ class HealthConnectPlugin : Plugin() {
 
     @ActivityCallback
     fun handleRequestPermission(call: PluginCall, result: ActivityResult) {
+
         val reqReadPermissions = call.getArray("read").toList<String>().map {
             HealthPermission.getReadPermission(
                     recordType = RECORDS_TYPE_NAME_MAP[it] ?: throw IllegalArgumentException("Unexpected RecordType: $it")
             )
         }.toSet()
+
         val reqWritePermissions = call.getArray("write").toList<String>().map {
             HealthPermission.getWritePermission(
                     recordType = RECORDS_TYPE_NAME_MAP[it] ?: throw IllegalArgumentException("Unexpected RecordType: $it")
@@ -224,6 +258,8 @@ class HealthConnectPlugin : Plugin() {
 
         val grantedPermissions = permissionContract.parseResult(result.resultCode, result.data).toSet()
         val hasAllPermissions = grantedPermissions.containsAll(reqReadPermissions + reqWritePermissions)
+        println(grantedPermissions)
+        println(hasAllPermissions)
 
         val res = JSObject().apply {
             put("grantedPermissions", JSArray(grantedPermissions))
@@ -249,7 +285,11 @@ class HealthConnectPlugin : Plugin() {
             }.toSet()
 
             val grantedPermissions = healthConnectClient.permissionController.getGrantedPermissions()
+            println("[healthconnectPluging] granted Permissions")
+            println(grantedPermissions)
             val hasAllPermissions = grantedPermissions.containsAll(reqReadPermissions + reqWritePermissions)
+            println("[healthconnectPluging] Has All Permissions")
+            println(hasAllPermissions)
 
             val res = JSObject().apply {
                 put("grantedPermissions", JSArray(grantedPermissions))

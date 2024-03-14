@@ -37,8 +37,8 @@ export interface HealthConnectPlugin {
   revokeHealthPermissions(): Promise<void>;
   openHealthConnectSetting(): Promise<void>;
 }
-export type HealthConnectAvailability = 'Available' | 'NotInstalled' | 'NotSupported';
-export type RecordType = 'Height' | 'Weight' | 'Steps' | 'BloodGlucose';
+export type HealthConnectAvailability = 'Available' | 'NotInstalled' | 'NotSupported' | 'Installed' | 'Unavailable';
+export type RecordType = 'Height' | 'Weight' | 'Steps' | 'BloodGlucose' | 'HeartRate' | 'SleepSession';
 type RecordBase = {
   metadata: RecordMetadata;
 };
@@ -120,7 +120,25 @@ export type Record =
       endTime: Date;
       endZoneOffset?: string;
       count: number;
-    };
+    }
+  | {
+      type: 'HeartRate';
+      startTime: Date;
+      startZoneOffset?: string;
+      endTime: Date;
+      endZoneOffset?: string;
+      samples: sample[];
+  }
+  | {
+     type: 'SleepSession'
+     startTime: Date,
+     startZoneOffset?: string,
+     endTime: Date,
+     endZoneOffset?: string,
+     title?: String,
+     notes?: String,
+     stages: Stage[]
+  };
 export type RecordMetadata = {
   id: string;
   clientRecordId?: string;
@@ -172,6 +190,15 @@ export type Mass = {
   unit: 'gram' | 'kilogram' | 'milligram' | 'microgram' | 'ounce' | 'pound';
   value: number;
 };
+export type sample = {
+  time: Date;
+  beatsPerMinute: number;
+}
+export type Stage = {
+    startTime: Date,
+    endTime: Date,
+    stage: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 0
+}
 export type BloodGlucose = {
   unit: 'milligramsPerDeciliter' | 'millimolesPerLiter';
   value: number;

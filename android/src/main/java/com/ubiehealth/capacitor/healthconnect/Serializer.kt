@@ -87,6 +87,35 @@ internal fun JSONObject.toRecord(): Record {
             endZoneOffset = this.getZoneOffsetOrNull("endZoneOffset"),
             count = this.getLong("count"),
         )
+        "HeartRate" -> HeartRateRecord(
+                startTime = this.getInstant("startTime"),
+                endTime = this.getInstant("endTime"),
+                endZoneOffset = this.getZoneOffsetOrNull("endZoneOffset"),
+                startZoneOffset = this.getZoneOffsetOrNull("startZoneOffset"),
+                samples = this.getJSONArray("samples").toList<JSONObject>().map { sampleObj ->
+                    HeartRateRecord.Sample(
+                            time = Instant.parse(sampleObj.getString("time")),
+                            beatsPerMinute = sampleObj.getLong("beatsPerMinute")
+                    )
+                }//*
+        )
+        "SleepSession" -> SleepSessionRecord(
+                startTime = this.getInstant("startTime"),
+                startZoneOffset = this.getZoneOffsetOrNull("startZoneOffset"),
+                endTime = this.getInstant("endTime"),
+                endZoneOffset = this.getZoneOffsetOrNull("endZoneOffset"),
+                title = this.optString("title", null),
+                notes = this.optString("notes", null),
+                stages = this.getJSONArray("stages").toList<JSONObject>().map { stageObj ->
+                    SleepSessionRecord.Stage(
+                            startTime = Instant.parse(stageObj.getString("startTime")),
+                            endTime = Instant.parse(stageObj.getString("endTime")),
+                            stage = stageObj.getInt("stage")
+                    )
+                }
+        )
+
+
 
         else -> throw IllegalArgumentException("Unexpected record type: $type")
     }
@@ -149,6 +178,39 @@ internal fun Record.toJSONObject(): JSONObject {
                 obj.put("endZoneOffset", this.endZoneOffset?.toJSONValue())
                 obj.put("count", this.count)
             }
+            is HeartRateRecord -> {
+                obj.put("startTime", this.startTime.toString())
+                obj.put("startZoneOffset", this.startZoneOffset?.id ?: JSONObject.NULL)
+                obj.put("endTime", this.endTime.toString())
+                obj.put("endZoneOffset", this.endZoneOffset?.id ?: JSONObject.NULL)
+                obj.put("samples", JSONArray().apply {
+                    samples.forEach { sample ->
+                    this.put(JSONObject().apply {
+                        put("time", sample.time.toString())
+                        put("beatsPerMinute", sample.beatsPerMinute)
+                    })
+                }
+                })
+            }
+            is SleepSessionRecord -> {
+                obj.put("startTime", this.startTime.toString())
+                obj.put("startZoneOffset", this.startZoneOffset?.id ?: JSONObject.NULL)
+                obj.put("endTime", this.endTime.toString())
+                obj.put("endZoneOffset", this.endZoneOffset?.id ?: JSONObject.NULL)
+                obj.put("title", this.title ?: JSONObject.NULL)
+                obj.put("notes", this.notes ?: JSONObject.NULL)
+                obj.put("stages", JSONArray().apply {
+                    stages.forEach { stage ->
+                    this.put(JSONObject().apply {
+                        put("startTime", stage.startTime.toString())
+                        put("endTime", stage.endTime.toString())
+                        put("stage", stage.stage) // Directamente usa el valor entero
+                    })
+                }
+                })
+            }
+
+
             else -> throw IllegalArgumentException("Unexpected record class: $${this::class.qualifiedName}")
         }
     }
