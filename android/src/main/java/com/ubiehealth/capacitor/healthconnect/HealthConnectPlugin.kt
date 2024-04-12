@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import android.os.Build
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
@@ -46,37 +47,46 @@ class HealthConnectPlugin : Plugin() {
 
     @PluginMethod
     fun checkAvailability(call: PluginCall) {
+        //En caso de que la version actual sea menor a la API 34 (UPSIDE_DOWN_CAKE)(Android 14) entonces la funcionalidad de este plugin se inabilita
+        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ){
+            val res = JSObject().apply {
+                put("availability", "Unavailable")
+            }
+            call.resolve(res)
+        } else { //En caso de ser API 34 o mayor continuar normalmente
+            val availabilityStatus = HealthConnectClient.getSdkStatus(this.context)
 
-        val availabilityStatus = HealthConnectClient.getSdkStatus(this.context)
+            if (availabilityStatus == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
+                // Optionally redirect to package installer to find a provider, for example:
+                val providerPackageName = "com.ubiehealth.capacitor.healthconnect"
+                val uriString =
+                        "market://details?id=$providerPackageName&url=healthconnect%3A%2F%2Fonboarding"
+                context.startActivity(
+                        Intent(Intent.ACTION_VIEW).apply {
+                            setPackage("com.android.vending")
+                            data = Uri.parse(uriString)
+                            putExtra("overlay", true)
+                            putExtra("callerId", context.packageName)
+                        }
+                )
+                return
+            }
 
-        if (availabilityStatus == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
-            // Optionally redirect to package installer to find a provider, for example:
-            val providerPackageName = "com.ubiehealth.capacitor.healthconnect"
-            val uriString =
-                "market://details?id=$providerPackageName&url=healthconnect%3A%2F%2Fonboarding"
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW).apply {
-                    setPackage("com.android.vending")
-                    data = Uri.parse(uriString)
-                    putExtra("overlay", true)
-                    putExtra("callerId", context.packageName)
-                }
-            )
-            return
+
+            val availability = when (val status = HealthConnectClient.getSdkStatus(this.context)) {
+                HealthConnectClient.SDK_AVAILABLE -> "Available"
+                HealthConnectClient.SDK_UNAVAILABLE -> "Unavailable"
+                HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "NotInstalled"
+                else -> throw RuntimeException("Invalid sdk status: $status")
+            }
+
+            val res = JSObject().apply {
+                put("availability", availability)
+            }
+            call.resolve(res)
         }
 
 
-        val availability = when (val status = HealthConnectClient.getSdkStatus(this.context)) {
-            HealthConnectClient.SDK_AVAILABLE -> "Available"
-            HealthConnectClient.SDK_UNAVAILABLE -> "Unavailable"
-            HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> "NotInstalled"
-            else -> throw RuntimeException("Invalid sdk status: $status")
-        }
-
-        val res = JSObject().apply {
-            put("availability", availability)
-        }
-        call.resolve(res)
     }
 
     @PluginMethod
