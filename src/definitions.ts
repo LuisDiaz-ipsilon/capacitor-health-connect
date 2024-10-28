@@ -38,7 +38,7 @@ export interface HealthConnectPlugin {
   openHealthConnectSetting(): Promise<void>;
 }
 export type HealthConnectAvailability = 'Available' | 'NotInstalled' | 'NotSupported' | 'Installed' | 'Unavailable';
-export type RecordType = 'Height' | 'Weight' | 'Steps' | 'BloodGlucose' | 'HeartRate' | 'SleepSession';
+export type RecordType = 'Height' | 'Weight' | 'Steps' | 'BloodGlucose' | 'HeartRate' | 'SleepSession' | 'BloodPressure';
 type RecordBase = {
   metadata: RecordMetadata;
 };

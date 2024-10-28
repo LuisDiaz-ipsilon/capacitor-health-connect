@@ -253,7 +253,7 @@ Construct a type with a set of properties K of type T
 
 #### RecordType
 
-<code>'Height' | 'Weight' | 'Steps' | 'BloodGlucose' | 'HeartRate' | 'SleepSession'</code>
+<code>'Height' | 'Weight' | 'Steps' | 'BloodGlucose' | 'HeartRate' | 'SleepSession' | 'BloodPressure'</code>
 
 
 #### TimeRangeFilter

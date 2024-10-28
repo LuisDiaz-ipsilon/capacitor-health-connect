@@ -19,6 +19,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.lifecycle.lifecycleScope
@@ -85,8 +86,6 @@ class HealthConnectPlugin : Plugin() {
             }
             call.resolve(res)
         }
-
-
     }
 
     @PluginMethod
@@ -234,7 +233,9 @@ class HealthConnectPlugin : Plugin() {
                 HealthPermission.getReadPermission(HeartRateRecord::class),
                 HealthPermission.getWritePermission(HeartRateRecord::class),
                 HealthPermission.getReadPermission(SleepSessionRecord::class),
-                HealthPermission.getWritePermission(SleepSessionRecord::class)
+                HealthPermission.getWritePermission(SleepSessionRecord::class),
+                HealthPermission.getReadPermission(BloodPressureRecord::class),
+                HealthPermission.getWritePermission(BloodPressureRecord::class)
             )
         )
 
